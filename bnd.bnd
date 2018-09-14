@@ -1,0 +1,3 @@
+Bundle-Name: dropbox-external-repository
+Bundle-SymbolicName: com.liferay.document.library.repository.dropbox
+Bundle-Version: 1.0.0
