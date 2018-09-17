@@ -1,10 +1,16 @@
 package com.liferay.document.library.repository.dropbox;
 
+import com.dropbox.core.v1.DbxEntry;
+import com.liferay.asset.kernel.service.AssetEntryLocalService;
+import com.liferay.document.library.repository.dropbox.model.DropboxObject;
 import com.liferay.document.library.repository.external.ExtRepositoryAdapter;
+import com.liferay.document.library.repository.external.ExtRepositoryObject;
+import com.liferay.document.library.repository.external.ExtRepositoryObjectType;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.lock.Lock;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.repository.BaseRepository;
 import com.liferay.portal.kernel.repository.Repository;
 import com.liferay.portal.kernel.repository.capabilities.Capability;
 import com.liferay.portal.kernel.repository.model.*;
@@ -13,12 +19,15 @@ import com.liferay.portal.kernel.search.Hits;
 import com.liferay.portal.kernel.search.Query;
 import com.liferay.portal.kernel.search.SearchContext;
 import com.liferay.portal.kernel.search.SearchException;
+import com.liferay.portal.kernel.service.RepositoryEntryLocalService;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.util.OrderByComparator;
+import org.osgi.service.component.annotations.Reference;
 
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public class RepositoryProxyBean extends RepositoryModelProxyBean implements Repository {
@@ -514,8 +523,7 @@ public class RepositoryProxyBean extends RepositoryModelProxyBean implements Rep
         try (ContextClassLoaderSetter contextClassLoaderSetter =
                      new ContextClassLoaderSetter(_classLoader)) {
 
-            return 5;
-//			return _repository.getFileEntriesCount(folderId);
+			return _repository.getFileEntriesCount(folderId);
         }
     }
 
@@ -708,14 +716,17 @@ public class RepositoryProxyBean extends RepositoryModelProxyBean implements Rep
 
         try (ContextClassLoaderSetter contextClassLoaderSetter =
                      new ContextClassLoaderSetter(_classLoader)) {
+            System.out.println(folderId);
 
-//            List<RepositoryEntry> foldersAndFileEntriesAndFileShortcuts =
-//                    _repository.getFoldersAndFileEntriesAndFileShortcuts(
-//                            folderId, status, mimetypes, includeMountFolders, start,
-//                            end, obc);
+//            _repositoryEntryLocalService.addRepositoryEntry(20139,20126,49572, "49572",new ServiceContext());
 
             _log.info("getFoldersAndFileEntriesAndFileShortcuts");
-            List<RepositoryEntry> foldersAndFileEntriesAndFileShortcuts = new ArrayList<>();
+//            List<RepositoryEntry> foldersAndFileEntriesAndFileShortcuts = new ArrayList<>();
+
+            List<RepositoryEntry> foldersAndFileEntriesAndFileShortcuts =
+            _repository.getFoldersAndFileEntriesAndFileShortcuts(
+                    folderId, status, mimetypes, includeMountFolders, start,
+                    end, obc);
 
             return toObjectProxyBeans(foldersAndFileEntriesAndFileShortcuts);
         }
@@ -743,7 +754,8 @@ public class RepositoryProxyBean extends RepositoryModelProxyBean implements Rep
         try (ContextClassLoaderSetter contextClassLoaderSetter =
                      new ContextClassLoaderSetter(_classLoader)) {
 
-            return 1;
+            return _repository.getFoldersAndFileEntriesAndFileShortcutsCount(
+                    folderId, status, includeMountFolders);
         }
     }
 
@@ -1307,4 +1319,12 @@ public class RepositoryProxyBean extends RepositoryModelProxyBean implements Rep
     private final ClassLoader _classLoader;
     private final Repository _repository;
     private static final Log _log = LogFactoryUtil.getLog(RepositoryProxyBean.class);
+
+    private RepositoryEntryLocalService _repositoryEntryLocalService;
+    @Reference(unbind = "-")
+    protected void setRepositoryEntryLocalService(
+            RepositoryEntryLocalService repositoryEntryLocalService) {
+
+        _repositoryEntryLocalService = repositoryEntryLocalService;
+    }
 }

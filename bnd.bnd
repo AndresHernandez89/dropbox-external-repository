@@ -1,3 +1,7 @@
 Bundle-Name: dropbox-external-repository
 Bundle-SymbolicName: com.liferay.document.library.repository.dropbox
 Bundle-Version: 1.0.0
+Import-Package: !android.*,!com.google.appengine.*,!com.squareup.*,!okhttp3.*,!okio.*,*
+-includeresource: \
+    @dropbox-core-sdk-[0-9]*.jar,\
+    @jackson-core-[0-9]*.jar

@@ -38,9 +38,6 @@ public abstract class BaseDropboxRepositoryFactory <T extends ExtRepositoryAdapt
                      new ContextClassLoaderSetter(
                              BaseDropboxRepositoryFactory.class.getClassLoader())) {
 
-            //Pregutarle a Manuel
-//            return new DropboxRepository();
-
             return new RepositoryProxyBean(
                     createBaseRepository(repositoryId),
                     BaseDropboxRepositoryFactory.class.getClassLoader());
