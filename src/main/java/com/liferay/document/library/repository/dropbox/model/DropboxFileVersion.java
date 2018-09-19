@@ -1,5 +1,7 @@
 package com.liferay.document.library.repository.dropbox.model;
 
+import com.dropbox.core.v2.files.FileMetadata;
+import com.dropbox.core.v2.files.Metadata;
 import com.liferay.document.library.repository.external.ExtRepositoryFileVersion;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.StringBundler;
@@ -9,12 +11,14 @@ import java.util.Date;
 
 public class DropboxFileVersion extends DropboxModel implements ExtRepositoryFileVersion {
 
-	public DropboxFileVersion(String extRepositoryFileEntryKey, int version) {
+	public DropboxFileVersion(Metadata metadata, String extRepositoryFileEntryKey, int version) {
 
-		super(new Date(), extRepositoryFileEntryKey, GetterUtil.getLong(1), GetterUtil.getString(""));
+		super(new Date(), extRepositoryFileEntryKey, ((FileMetadata)metadata).getSize(), "");
 
+		_revision = ((FileMetadata)metadata).getRev();
 		_extRepositoryFileEntryKey = extRepositoryFileEntryKey;
 		_version = version + ".0";
+		_downloadUrl = metadata.getPathLower();
 	}
 
 	@Override
@@ -22,9 +26,9 @@ public class DropboxFileVersion extends DropboxModel implements ExtRepositoryFil
 		return StringPool.BLANK;
 	}
 
-	// public String getDownloadURL() {
-	// return GetterUtil.getString(_revision.getDownloadUrl());
-	// }
+	public String getDownloadURL() {
+		return _downloadUrl;
+	}
 
 	@Override
 	public String getExtRepositoryModelKey() {
@@ -39,24 +43,20 @@ public class DropboxFileVersion extends DropboxModel implements ExtRepositoryFil
 		return sb.toString();
 	}
 
-	// @Override
-	// public String getMimeType() {
-	// return GetterUtil.getString(_revision.getMimeType());
-	// }
-
 	@Override
 	public String getVersion() {
 		return _version;
 	}
 
 	private String _extRepositoryFileEntryKey;
-	// private Revision _revision;
+	private String _revision;
 	private String _version;
+	private String _downloadUrl;
 
 	@Override
 	public String getMimeType() {
 		// TODO Auto-generated method stub
-		return null;
+		return "";
 	}
 
 }

@@ -5,3 +5,5 @@ Import-Package: !android.*,!com.google.appengine.*,!com.squareup.*,!okhttp3.*,!o
 -includeresource: \
     @dropbox-core-sdk-[0-9]*.jar,\
     @jackson-core-[0-9]*.jar
+
+

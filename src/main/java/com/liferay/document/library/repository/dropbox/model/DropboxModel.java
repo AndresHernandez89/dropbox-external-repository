@@ -1,6 +1,9 @@
 package com.liferay.document.library.repository.dropbox.model;
 
 import com.dropbox.core.v1.DbxEntry;
+import com.dropbox.core.v2.files.FileMetadata;
+import com.dropbox.core.v2.files.FolderMetadata;
+import com.dropbox.core.v2.files.Metadata;
 import com.liferay.document.library.repository.external.ExtRepositoryModel;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.StringPool;
@@ -19,14 +22,16 @@ public class DropboxModel implements ExtRepositoryModel {
         _owner = owner;
     }
 
-    public DropboxModel(DbxEntry.File file){
+    public DropboxModel(Metadata metadata){
         Date createDateTime = new Date();
 
         _createDate = createDateTime;
 
-        _extRepositoryModelKey = file.path;
+        _extRepositoryModelKey = metadata.getPathLower();
 
-        _size = GetterUtil.getLong(file.numBytes);
+        if (metadata instanceof FileMetadata) {
+            _size = GetterUtil.getLong(((FileMetadata)metadata).getSize());
+        }
 
         List<String> ownerNames = new ArrayList<>();
 
