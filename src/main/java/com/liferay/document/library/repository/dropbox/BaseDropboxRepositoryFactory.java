@@ -15,6 +15,7 @@ import com.liferay.portal.kernel.service.CompanyLocalService;
 import com.liferay.portal.kernel.service.RepositoryEntryLocalService;
 import com.liferay.portal.kernel.service.RepositoryLocalService;
 import com.liferay.portal.kernel.service.UserLocalService;
+import com.liferay.portal.kernel.util.PortalClassLoaderUtil;
 
 public abstract class BaseDropboxRepositoryFactory <T extends ExtRepositoryAdapter> implements RepositoryFactory{
 
@@ -36,11 +37,11 @@ public abstract class BaseDropboxRepositoryFactory <T extends ExtRepositoryAdapt
         System.out.println("createRepository");
         try (ContextClassLoaderSetter contextClassLoaderSetter =
                      new ContextClassLoaderSetter(
-                             BaseDropboxRepositoryFactory.class.getClassLoader())) {
+                             PortalClassLoaderUtil.getClassLoader())) {
 
             return new RepositoryProxyBean(
                     createBaseRepository(repositoryId),
-                    BaseDropboxRepositoryFactory.class.getClassLoader());
+                    PortalClassLoaderUtil.getClassLoader());
         }
     }
 
