@@ -3,12 +3,8 @@ package com.liferay.document.library.repository.dropbox;
 
 import com.dropbox.core.DbxException;
 import com.dropbox.core.DbxRequestConfig;
-import com.dropbox.core.v1.DbxClientV1;
-import com.dropbox.core.v1.DbxEntry.File;
-import com.dropbox.core.v2.DbxAppClientV2;
 import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.*;
-import com.dropbox.core.v2.sharing.ListFilesResult;
 import com.dropbox.core.v2.users.FullAccount;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileEntry;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileVersion;
@@ -17,21 +13,20 @@ import com.liferay.document.library.repository.dropbox.model.DropboxObject;
 import com.liferay.document.library.repository.external.*;
 import com.liferay.document.library.repository.external.search.ExtRepositoryQueryMapper;
 import com.liferay.portal.kernel.exception.PortalException;
-import com.liferay.portal.kernel.exception.SystemException;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
-import com.liferay.portal.kernel.repository.model.RepositoryEntry;
 import com.liferay.portal.kernel.search.Query;
 import com.liferay.portal.kernel.search.SearchContext;
-import com.liferay.portal.kernel.security.permission.PermissionChecker;
 import com.liferay.portal.kernel.util.*;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
+
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.BLANK;
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.COLON;
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.FORWARD_SLASH;
 
 public class DropboxRepository extends ExtRepositoryAdapter implements ExtRepository {
 
@@ -129,7 +124,7 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
         _log.info("getExtRepositoryFileVersionDescriptor");
 
         String[] extRepositoryFileVersionKeyParts = StringUtil.split(
-                extRepositoryFileVersionKey, StringPool.COLON);
+                extRepositoryFileVersionKey, COLON);
 
         String extRepositoryFileEntryKey = extRepositoryFileVersionKeyParts[0];
         String version = extRepositoryFileVersionKeyParts[2];
@@ -146,7 +141,7 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
         int i = 0;
 
         try {
-            ListRevisionsResult result =  clientv2.files().listRevisions("/" + extRepositoryFileEntry.getTitle());
+            ListRevisionsResult result =  clientv2.files().listRevisions(FORWARD_SLASH + extRepositoryFileEntry.getTitle());
             for (Metadata metadata : result.getEntries()) {
 
                 _log.info(metadata.toStringMultiline());
@@ -171,13 +166,26 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
 
     @Override
     public <T extends ExtRepositoryObject> T getExtRepositoryObject(ExtRepositoryObjectType<T> extRepositoryObjectType, String extRepositoryObjectKey) throws PortalException {
-        _log.info("getExtRepositoryObject");
-    	return null;
+        _log.info("getExtRepositoryObject 1: extRepositoryObjectKey" + extRepositoryObjectKey + ", extRepositoryObjectType: " + extRepositoryObjectType);
+
+        Metadata metadata = Metadata.newBuilder("").build();
+        try {
+            metadata = clientv2.files().getMetadata(extRepositoryObjectKey);
+        } catch (DbxException e) {
+            e.printStackTrace();
+        }
+
+        if (metadata instanceof FolderMetadata){
+            return (T)new DropboxFolder(
+                    metadata, getRootFolderKey());
+        }else{
+            return (T)new DropboxFileEntry((FileMetadata) metadata);
+        }
     }
 
     @Override
     public <T extends ExtRepositoryObject> T getExtRepositoryObject(ExtRepositoryObjectType<T> extRepositoryObjectType, String extRepositoryFolderKey, String title) throws PortalException {
-        _log.info("getExtRepositoryObject");
+        _log.info("getExtRepositoryObject 2");
     	return null;
     }
 
@@ -185,62 +193,43 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     public <T extends ExtRepositoryObject> List<T> getExtRepositoryObjects(ExtRepositoryObjectType<T> extRepositoryObjectType, String extRepositoryFolderKey) throws PortalException {
         _log.info("getExtRepositoryObjects, path: " + extRepositoryFolderKey);
 
-        ListFolderResult result = null;
+        List<T> extRepositoryObjects = new ArrayList<>();
+
         try {
-            result = clientv2.files().listFolderBuilder("").withRecursive(true).withIncludeMediaInfo(true).start();
+            String path = BLANK;
+            if(!extRepositoryFolderKey.equals(FORWARD_SLASH)){
+                path = extRepositoryFolderKey;
+            }
+
+            ListFolderResult result = clientv2.files().listFolderBuilder(path)
+                    .withRecursive(true)
+                    .withIncludeMediaInfo(true)
+                    .start();
+
+
+            List<Metadata> fileList = new ArrayList<>();
+            for (Metadata metadata : result.getEntries()) {
+                fileList.add(metadata);
+            }
+
+            //TODO: finish cache stuff
+            //DropboxCache dropboxCache = DropboxCache.getInstance();
+
+            for (Metadata metadata : fileList) {
+                if (metadata instanceof FolderMetadata) {
+                    extRepositoryObjects.add(
+                        (T)new DropboxFolder(metadata, getRootFolderKey()));
+                }else{
+                    extRepositoryObjects.add((T)new DropboxFileEntry(((FileMetadata) metadata)));
+                }
+
+                //dropboxCache.put(metadata);
+            }
         } catch (DbxException e) {
+            _log.error(e.getMessage());
             e.printStackTrace();
         }
 
-        List<Metadata> fileList = new ArrayList<>();
-        for (Metadata metadata : result.getEntries()) {
-            fileList.add(metadata);
-        }
-
-		StringBundler sb = new StringBundler();
-
-		if (extRepositoryFolderKey != null) {
-			sb.append("'");
-			sb.append(extRepositoryFolderKey);
-			sb.append("' in parents and ");
-		}
-
-		if (!extRepositoryObjectType.equals(
-				ExtRepositoryObjectType.OBJECT)) {
-
-			sb.append("mimeType");
-
-			if (extRepositoryObjectType.equals(
-					ExtRepositoryObjectType.FILE)) {
-
-				sb.append(" != '");
-			}
-			else {
-				sb.append(" = '");
-			}
-
-			sb.append(_FOLDER_MIME_TYPE);
-			sb.append("' and ");
-		}
-
-		sb.append("trashed = false");
-
-		_log.info(sb.toString());
-
-		List<T> extRepositoryObjects = new ArrayList<>();
-
-		//GoogleDriveCache googleDriveCache = GoogleDriveCache.getInstance();
-
-		for (Metadata metadata : fileList) {
-            if (metadata instanceof FolderMetadata) {
-				extRepositoryObjects.add(
-					(T)new DropboxFolder(metadata, getRootFolderKey()));
-			}else{
-				extRepositoryObjects.add((T)new DropboxFileEntry(((FileMetadata) metadata)));
-			}
-
-			//googleDriveCache.put(file);
-		}
         _log.info(extRepositoryObjects.size());
 		return extRepositoryObjects;
     }
@@ -248,48 +237,73 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     @Override
     public int getExtRepositoryObjectsCount(ExtRepositoryObjectType<? extends ExtRepositoryObject> extRepositoryObjectType, String extRepositoryFolderKey) throws PortalException {
         _log.info("getExtRepositoryObjectsCount, path: " + extRepositoryFolderKey);
-        ListFolderResult result = null;
+
+        int size = 0;
         try {
-            if(extRepositoryFolderKey.equals("/")){
-                result = clientv2.files().listFolder("");
+            ListFolderResult result;
+
+            if(extRepositoryFolderKey.equals(FORWARD_SLASH)){
+                result = clientv2.files().listFolder(BLANK);
             }else{
                 result = clientv2.files().listFolder(extRepositoryFolderKey);
             }
+
+            while (true) {
+                for (Metadata metadata : result.getEntries()) {
+                    _log.info(metadata.getPathLower());
+                }
+
+                if (!result.getHasMore()) {
+                    break;
+                }
+
+                result = clientv2.files().listFolderContinue(result.getCursor());
+
+            }
+
+            size = result.getEntries().size();
 
         } catch (DbxException e) {
             e.printStackTrace();
         }
 
-        while (true) {
-            for (Metadata metadata : result.getEntries()) {
-                _log.info(metadata.getPathLower());
-            }
+        _log.info("Size: " + size);
 
-            if (!result.getHasMore()) {
-                break;
-            }
-
-            try {
-                result = clientv2.files().listFolderContinue(result.getCursor());
-            } catch (DbxException e) {
-                e.printStackTrace();
-            }
-        }
-        _log.info("Size: " + result.getEntries().size());
-         return result.getEntries().size();
-//        return 0;
+        return size;
     }
 
     @Override
     public ExtRepositoryFolder getExtRepositoryParentFolder(ExtRepositoryObject extRepositoryObject) throws PortalException {
-        _log.info("getExtRepositoryParentFolder");
+        _log.info("getExtRepositoryParentFolder, key: " + extRepositoryObject.getExtRepositoryModelKey());
+
+        extRepositoryObject.getExtRepositoryModelKey();
+//        clientv2.files().
+//        try {
+//            Drive drive = getDrive();
+//
+//            File file = getFile(
+//                    drive, extRepositoryObject.getExtRepositoryModelKey());
+//
+//            List<ParentReference> parentReferences = file.getParents();
+//
+//            if (!parentReferences.isEmpty()) {
+//                ParentReference parentReference = parentReferences.get(0);
+//
+//                File parentFile = getFile(drive, parentReference.getId());
+//
+//                return new GoogleDriveFolder(parentFile, getRootFolderKey());
+//            }
+//        }
+//        catch (IOException ioe) {
+//            //_log.error(ioe, ioe);
+//        }
         return null;
     }
 
     @Override
     public String getRootFolderKey() throws PortalException {
     	_log.info("getRootFolderKey");
-        return "/";
+        return FORWARD_SLASH;
     }
 
     @Override
@@ -327,9 +341,6 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     public ExtRepositoryFileEntry updateExtRepositoryFileEntry(String extRepositoryFileEntryKey, String mimeType, InputStream inputStream) throws PortalException {
         return null;
     }
-
-    private static final String _FOLDER_MIME_TYPE =
-    		"folder";
 
     public DbxClientV2 getClientV2() {
         return clientv2;
