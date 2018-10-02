@@ -1,7 +1,5 @@
 package com.liferay.document.library.repository.dropbox.model;
 
-import com.dropbox.core.v1.DbxEntry;
-import com.dropbox.core.v2.files.FolderMetadata;
 import com.dropbox.core.v2.files.Metadata;
 import com.liferay.document.library.repository.external.ExtRepositoryFolder;
 import com.liferay.portal.kernel.util.GetterUtil;
@@ -22,7 +20,8 @@ public class DropboxFolder extends DropboxObject implements ExtRepositoryFolder 
 
     @Override
     public boolean isRoot() {
-        return _rootFolderKey.equals(getExtRepositoryModelKey());
+    	String root = getExtRepositoryModelKey() != null ? getExtRepositoryModelKey() : "/";
+        return _rootFolderKey.equals(root);
     }
 
     private String _name;

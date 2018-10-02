@@ -1,32 +1,49 @@
 package com.liferay.document.library.repository.dropbox;
 
 
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.BLANK;
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.COLON;
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.FORWARD_SLASH;
+
+import com.dropbox.core.DbxDownloader;
 import com.dropbox.core.DbxException;
 import com.dropbox.core.DbxRequestConfig;
 import com.dropbox.core.v2.DbxClientV2;
-import com.dropbox.core.v2.files.*;
+import com.dropbox.core.v2.files.FileMetadata;
+import com.dropbox.core.v2.files.FolderMetadata;
+import com.dropbox.core.v2.files.ListFolderResult;
+import com.dropbox.core.v2.files.ListRevisionsResult;
+import com.dropbox.core.v2.files.Metadata;
 import com.dropbox.core.v2.users.FullAccount;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileEntry;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileVersion;
 import com.liferay.document.library.repository.dropbox.model.DropboxFolder;
-import com.liferay.document.library.repository.dropbox.model.DropboxObject;
-import com.liferay.document.library.repository.external.*;
+import com.liferay.document.library.repository.external.CredentialsProvider;
+import com.liferay.document.library.repository.external.ExtRepository;
+import com.liferay.document.library.repository.external.ExtRepositoryAdapter;
+import com.liferay.document.library.repository.external.ExtRepositoryFileEntry;
+import com.liferay.document.library.repository.external.ExtRepositoryFileVersion;
+import com.liferay.document.library.repository.external.ExtRepositoryFileVersionDescriptor;
+import com.liferay.document.library.repository.external.ExtRepositoryFolder;
+import com.liferay.document.library.repository.external.ExtRepositoryObject;
+import com.liferay.document.library.repository.external.ExtRepositoryObjectType;
+import com.liferay.document.library.repository.external.ExtRepositorySearchResult;
 import com.liferay.document.library.repository.external.search.ExtRepositoryQueryMapper;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.search.Query;
 import com.liferay.portal.kernel.search.SearchContext;
-import com.liferay.portal.kernel.util.*;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.UnicodeProperties;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.BLANK;
-import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.COLON;
-import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.FORWARD_SLASH;
 
 public class DropboxRepository extends ExtRepositoryAdapter implements ExtRepository {
 
@@ -85,7 +102,16 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     @Override
     public InputStream getContentStream(ExtRepositoryFileVersion extRepositoryFileVersion) throws PortalException {
         _log.info("getContentStream");
-        return null;
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try {
+        	String[] parts = extRepositoryFileVersion.getExtRepositoryModelKey().split(":");
+        	DbxDownloader<FileMetadata> downloader = clientv2.files().download(parts[0]);        	
+        	downloader.download(byteArrayOutputStream);
+        } catch (Exception ex) {
+            System.out.println("Error " + ex.getMessage());
+        }
+        
+        return new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
     }
 
     @Override
@@ -141,7 +167,7 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
         int i = 0;
 
         try {
-            ListRevisionsResult result =  clientv2.files().listRevisions(FORWARD_SLASH + extRepositoryFileEntry.getTitle());
+            ListRevisionsResult result =  clientv2.files().listRevisions(extRepositoryFileEntry.getExtRepositoryModelKey());
             for (Metadata metadata : result.getEntries()) {
 
                 _log.info(metadata.toStringMultiline());
@@ -176,8 +202,9 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
         }
 
         if (metadata instanceof FolderMetadata){
+        	String[] parts = metadata.getPathLower().split(FORWARD_SLASH);
             return (T)new DropboxFolder(
-                    metadata, getRootFolderKey());
+                    metadata, FORWARD_SLASH + parts[parts.length-2]);
         }else{
             return (T)new DropboxFileEntry((FileMetadata) metadata);
         }
@@ -217,8 +244,9 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
 
             for (Metadata metadata : fileList) {
                 if (metadata instanceof FolderMetadata) {
+                	String[] parts = metadata.getPathLower().split(FORWARD_SLASH);
                     extRepositoryObjects.add(
-                        (T)new DropboxFolder(metadata, getRootFolderKey()));
+                        (T)new DropboxFolder(metadata, FORWARD_SLASH + parts[parts.length-2]));
                 }else{
                     extRepositoryObjects.add((T)new DropboxFileEntry(((FileMetadata) metadata)));
                 }
@@ -276,28 +304,26 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     public ExtRepositoryFolder getExtRepositoryParentFolder(ExtRepositoryObject extRepositoryObject) throws PortalException {
         _log.info("getExtRepositoryParentFolder, key: " + extRepositoryObject.getExtRepositoryModelKey());
 
-        extRepositoryObject.getExtRepositoryModelKey();
-//        clientv2.files().
-//        try {
-//            Drive drive = getDrive();
-//
-//            File file = getFile(
-//                    drive, extRepositoryObject.getExtRepositoryModelKey());
-//
-//            List<ParentReference> parentReferences = file.getParents();
-//
-//            if (!parentReferences.isEmpty()) {
-//                ParentReference parentReference = parentReferences.get(0);
-//
-//                File parentFile = getFile(drive, parentReference.getId());
-//
-//                return new GoogleDriveFolder(parentFile, getRootFolderKey());
-//            }
-//        }
-//        catch (IOException ioe) {
-//            //_log.error(ioe, ioe);
-//        }
-        return null;
+        Metadata metadata = Metadata.newBuilder(FORWARD_SLASH).build();
+        DropboxFolder folder = new DropboxFolder(metadata, FORWARD_SLASH);
+        
+        if(extRepositoryObject.getExtRepositoryModelKey() != null) {
+        	String[] parts = extRepositoryObject.getExtRepositoryModelKey().split(FORWARD_SLASH);
+            if(parts.length > 2) {
+            	try {
+                    metadata = clientv2.files().getMetadata(FORWARD_SLASH + parts[parts.length-2]);
+                    folder = new DropboxFolder(metadata, metadata.getPathLower());
+                } catch (DbxException e) {
+                    e.printStackTrace();
+                }
+            } else {
+            	System.out.println("Just testing");
+            }
+        } else {
+        	return null;
+        }
+
+        return folder;
     }
 
     @Override

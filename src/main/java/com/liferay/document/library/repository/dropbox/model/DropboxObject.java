@@ -1,15 +1,14 @@
 package com.liferay.document.library.repository.dropbox.model;
 
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.ROLE_OWNER;
+import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.ROLE_WRITER;
+
 import com.dropbox.core.v2.files.FileMetadata;
-import com.dropbox.core.v2.files.FolderMetadata;
 import com.dropbox.core.v2.files.Metadata;
 import com.liferay.document.library.repository.external.ExtRepositoryObject;
 import com.liferay.portal.kernel.util.GetterUtil;
 
 import java.util.Date;
-
-import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.ROLE_OWNER;
-import static com.liferay.document.library.repository.dropbox.constants.DropboxRepositoryConstants.ROLE_WRITER;
 
 public class DropboxObject extends DropboxModel implements ExtRepositoryObject {
 
@@ -20,7 +19,7 @@ public class DropboxObject extends DropboxModel implements ExtRepositoryObject {
 
         if (metadata instanceof FileMetadata) {
             //TODO: check if the extension is needed by file preview
-            _extension = GetterUtil.getString("txt");
+        	_extension = "";
         }
 
         //TODO: get creation date from Dropbox SDK
