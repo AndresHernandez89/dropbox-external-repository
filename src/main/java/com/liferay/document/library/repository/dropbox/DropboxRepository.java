@@ -316,9 +316,7 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
                 } catch (DbxException e) {
                     e.printStackTrace();
                 }
-            } else {
-            	System.out.println("Just testing");
-            }
+            } 
         } else {
         	return null;
         }
