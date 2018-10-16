@@ -9,15 +9,21 @@ import com.dropbox.core.DbxDownloader;
 import com.dropbox.core.DbxException;
 import com.dropbox.core.DbxRequestConfig;
 import com.dropbox.core.v2.DbxClientV2;
+import com.dropbox.core.v2.files.CreateFolderErrorException;
+import com.dropbox.core.v2.files.CreateFolderResult;
+import com.dropbox.core.v2.files.DeleteErrorException;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.FolderMetadata;
 import com.dropbox.core.v2.files.ListFolderResult;
 import com.dropbox.core.v2.files.ListRevisionsResult;
 import com.dropbox.core.v2.files.Metadata;
+import com.dropbox.core.v2.files.UploadErrorException;
+import com.dropbox.core.v2.files.WriteMode;
 import com.dropbox.core.v2.users.FullAccount;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileEntry;
 import com.liferay.document.library.repository.dropbox.model.DropboxFileVersion;
 import com.liferay.document.library.repository.dropbox.model.DropboxFolder;
+import com.liferay.document.library.repository.dropbox.model.DropboxObject;
 import com.liferay.document.library.repository.external.CredentialsProvider;
 import com.liferay.document.library.repository.external.ExtRepository;
 import com.liferay.document.library.repository.external.ExtRepositoryAdapter;
@@ -39,9 +45,10 @@ import com.liferay.portal.kernel.util.UnicodeProperties;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -56,13 +63,37 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     @Override
     public ExtRepositoryFileEntry addExtRepositoryFileEntry(String extRepositoryParentFolderKey, String mimeType, String title, String description, String changeLog, InputStream inputStream) throws PortalException {
         _log.info("addExtRepositoryFileEntry");
-    	return null;
+        DropboxFileEntry fileEntry = null;
+        try {
+        	String path = extRepositoryParentFolderKey.equals(FORWARD_SLASH) ? extRepositoryParentFolderKey + title : extRepositoryParentFolderKey + FORWARD_SLASH + title;
+			FileMetadata metadata = clientv2.files().uploadBuilder(path)
+			        .withMode(WriteMode.ADD)
+			        .uploadAndFinish(inputStream);
+			fileEntry = new DropboxFileEntry(metadata);
+		} catch (UploadErrorException e) {
+			e.printStackTrace();
+		} catch (DbxException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+    	return fileEntry;
     }
 
     @Override
     public ExtRepositoryFolder addExtRepositoryFolder(String extRepositoryParentFolderKey, String name, String description) throws PortalException {
         _log.info("addExtRepositoryFolder");
-    	return null;
+        DropboxFolder folder = null;        
+        try {
+        	String path = extRepositoryParentFolderKey.equals(FORWARD_SLASH) ? extRepositoryParentFolderKey + name : extRepositoryParentFolderKey + FORWARD_SLASH + name;
+        	CreateFolderResult result = clientv2.files().createFolderV2(path, true);
+        	folder = new DropboxFolder(result.getMetadata(), extRepositoryParentFolderKey);
+		} catch (CreateFolderErrorException e) {
+			e.printStackTrace();
+		} catch (DbxException e) {
+			e.printStackTrace();
+		}
+    	return folder;
     }
 
     @Override
@@ -89,8 +120,15 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
     }
 
     @Override
-    public void deleteExtRepositoryObject(ExtRepositoryObjectType<? extends ExtRepositoryObject> extRepositoryObjectType, String extRepositoryObjectKey) throws PortalException {
-        _log.info("deleteExtRepositoryObject");
+    public void deleteExtRepositoryObject(ExtRepositoryObjectType<? extends ExtRepositoryObject> extRepositoryObjectType, String extRepositoryObjectKey) throws PortalException {    	
+    	_log.info("deleteExtRepositoryObject");
+    	try {
+			clientv2.files().deleteV2(extRepositoryObjectKey);
+		} catch (DeleteErrorException e) {
+			e.printStackTrace();
+		} catch (DbxException e) {
+			e.printStackTrace();
+		}
     }
 
     @Override
@@ -201,12 +239,19 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
             e.printStackTrace();
         }
 
-        if (metadata instanceof FolderMetadata){
-        	String[] parts = metadata.getPathLower().split(FORWARD_SLASH);
-            return (T)new DropboxFolder(
-                    metadata, FORWARD_SLASH + parts[parts.length-2]);
-        }else{
+        if (extRepositoryObjectType.equals(ExtRepositoryObjectType.FOLDER)){
+        	List<String> partsList = new ArrayList<>();
+        	if(metadata.getPathLower() != null) {
+        		String[] parts = metadata.getPathLower().split(FORWARD_SLASH);
+            	partsList = new ArrayList<>(Arrays.asList(parts));
+            	partsList.remove(parts[parts.length-1]);                
+        	}
+        	return (T)new DropboxFolder(
+                    metadata, String.join("/", partsList));
+        }else if(extRepositoryObjectType.equals(ExtRepositoryObjectType.FILE)){
             return (T)new DropboxFileEntry((FileMetadata) metadata);
+        } else {
+        	return (T)new DropboxObject(metadata);
         }
     }
 
@@ -229,8 +274,7 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
             }
 
             ListFolderResult result = clientv2.files().listFolderBuilder(path)
-                    .withRecursive(true)
-                    .withIncludeMediaInfo(true)
+                    .withRecursive(false)
                     .start();
 
 
@@ -245,8 +289,10 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
             for (Metadata metadata : fileList) {
                 if (metadata instanceof FolderMetadata) {
                 	String[] parts = metadata.getPathLower().split(FORWARD_SLASH);
+                	List<String> partsList = new ArrayList<>(Arrays.asList(parts));
+                	partsList.remove(parts[parts.length-1]);
                     extRepositoryObjects.add(
-                        (T)new DropboxFolder(metadata, FORWARD_SLASH + parts[parts.length-2]));
+                        (T)new DropboxFolder(metadata, String.join("/", partsList)));
                 }else{
                     extRepositoryObjects.add((T)new DropboxFileEntry(((FileMetadata) metadata)));
                 }
@@ -309,16 +355,16 @@ public class DropboxRepository extends ExtRepositoryAdapter implements ExtReposi
         
         if(extRepositoryObject.getExtRepositoryModelKey() != null) {
         	String[] parts = extRepositoryObject.getExtRepositoryModelKey().split(FORWARD_SLASH);
+        	List<String> partsList = new ArrayList<>(Arrays.asList(parts));
+        	partsList.remove(parts[parts.length-1]);
             if(parts.length > 2) {
             	try {
-                    metadata = clientv2.files().getMetadata(FORWARD_SLASH + parts[parts.length-2]);
+                    metadata = clientv2.files().getMetadata(String.join("/", partsList));
                     folder = new DropboxFolder(metadata, metadata.getPathLower());
                 } catch (DbxException e) {
                     e.printStackTrace();
                 }
             } 
-        } else {
-        	return null;
         }
 
         return folder;
